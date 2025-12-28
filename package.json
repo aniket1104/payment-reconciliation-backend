@@ -35,7 +35,6 @@
   "license": "MIT",
   "dependencies": {
     "@neondatabase/serverless": "^1.0.2",
-    "@prisma/adapter-neon": "^7.2.0",
     "@prisma/client": "^7.2.0",
     "chalk": "^4.1.2",
     "compression": "^1.7.4",

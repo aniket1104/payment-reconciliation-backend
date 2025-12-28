@@ -1,0 +1,386 @@
+{
+	"info": {
+		"_postman_id": "8a32997b-4029-4823-936a-21147040411a",
+		"name": "ScanPay Reconciliation API",
+		"description": "API collection for ScanPay Bank Reconciliation Service",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "Health",
+			"item": [
+				{
+					"name": "Health Check",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/health",
+							"host": ["{{baseUrl}}"],
+							"path": ["health"]
+						}
+					}
+				},
+				{
+					"name": "Readiness Check",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/health/ready",
+							"host": ["{{baseUrl}}"],
+							"path": ["health", "ready"]
+						}
+					}
+				},
+				{
+					"name": "Liveness Check",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/health/live",
+							"host": ["{{baseUrl}}"],
+							"path": ["health", "live"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Reconciliation",
+			"item": [
+				{
+					"name": "Upload CSV",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "file",
+									"type": "file",
+									"src": []
+								}
+							]
+						},
+						"url": {
+							"raw": "{{baseUrl}}/reconciliation/upload",
+							"host": ["{{baseUrl}}"],
+							"path": ["reconciliation", "upload"]
+						}
+					}
+				},
+				{
+					"name": "List Batches",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/reconciliation?limit=20&offset=0&sortBy=createdAt&sortOrder=desc",
+							"host": ["{{baseUrl}}"],
+							"path": ["reconciliation"],
+							"query": [
+								{ "key": "status", "value": "completed", "disabled": true },
+								{ "key": "limit", "value": "20" },
+								{ "key": "offset", "value": "0" },
+								{ "key": "sortBy", "value": "createdAt" },
+								{ "key": "sortOrder", "value": "desc" }
+							]
+						}
+					}
+				},
+				{
+					"name": "Get Batch Status",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/reconciliation/:batchId",
+							"host": ["{{baseUrl}}"],
+							"path": ["reconciliation", ":batchId"],
+							"variable": [
+								{ "key": "batchId", "value": "" }
+							]
+						}
+					}
+				},
+				{
+					"name": "Get Batch Summary",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/reconciliation/:batchId/summary",
+							"host": ["{{baseUrl}}"],
+							"path": ["reconciliation", ":batchId", "summary"],
+							"variable": [
+								{ "key": "batchId", "value": "" }
+							]
+						}
+					}
+				},
+				{
+					"name": "Get Transactions (Cursor)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/reconciliation/:batchId/transactions?limit=50",
+							"host": ["{{baseUrl}}"],
+							"path": ["reconciliation", ":batchId", "transactions"],
+							"query": [
+								{ "key": "limit", "value": "50" },
+								{ "key": "cursor", "value": "", "description": "Base64 cursor", "disabled": true },
+								{ "key": "status", "value": "needs_review", "disabled": true }
+							],
+							"variable": [
+								{ "key": "batchId", "value": "" }
+							]
+						}
+					}
+				},
+				{
+					"name": "Get Transactions (Offset - Page)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/reconciliation/:batchId/transactions?limit=20&page=1",
+							"host": ["{{baseUrl}}"],
+							"path": ["reconciliation", ":batchId", "transactions"],
+							"query": [
+								{ "key": "limit", "value": "20" },
+								{ "key": "page", "value": "1" },
+								{ "key": "status", "value": "needs_review", "disabled": true }
+							],
+							"variable": [
+								{ "key": "batchId", "value": "" }
+							]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Transactions",
+			"item": [
+				{
+					"name": "Get Transaction Details",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/transactions/:id",
+							"host": ["{{baseUrl}}"],
+							"path": ["transactions", ":id"],
+							"variable": [
+								{ "key": "id", "value": "" }
+							]
+						}
+					}
+				},
+				{
+					"name": "Get Audit History",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/transactions/:id/audit",
+							"host": ["{{baseUrl}}"],
+							"path": ["transactions", ":id", "audit"],
+							"variable": [
+								{ "key": "id", "value": "" }
+							]
+						}
+					}
+				},
+				{
+					"name": "Confirm Match",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"performedBy\": \"postman\"\n}",
+							"options": {
+								"raw": { "language": "json" }
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/transactions/:id/confirm",
+							"host": ["{{baseUrl}}"],
+							"path": ["transactions", ":id", "confirm"],
+							"variable": [
+								{ "key": "id", "value": "" }
+							]
+						}
+					}
+				},
+				{
+					"name": "Reject Match",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"reason\": \"Incorrect match\",\n    \"performedBy\": \"postman\"\n}",
+							"options": {
+								"raw": { "language": "json" }
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/transactions/:id/reject",
+							"host": ["{{baseUrl}}"],
+							"path": ["transactions", ":id", "reject"],
+							"variable": [
+								{ "key": "id", "value": "" }
+							]
+						}
+					}
+				},
+				{
+					"name": "Manual Match",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"invoiceId\": \"UUID-HERE\",\n    \"reason\": \"Manual override\",\n    \"performedBy\": \"postman\"\n}",
+							"options": {
+								"raw": { "language": "json" }
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/transactions/:id/match",
+							"host": ["{{baseUrl}}"],
+							"path": ["transactions", ":id", "match"],
+							"variable": [
+								{ "key": "id", "value": "" }
+							]
+						}
+					}
+				},
+				{
+					"name": "Mark External",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"reason\": \"Not an invoice payment\",\n    \"performedBy\": \"postman\"\n}",
+							"options": {
+								"raw": { "language": "json" }
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/transactions/:id/external",
+							"host": ["{{baseUrl}}"],
+							"path": ["transactions", ":id", "external"],
+							"variable": [
+								{ "key": "id", "value": "" }
+							]
+						}
+					}
+				},
+				{
+					"name": "Bulk Confirm",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"batchId\": \"UUID-HERE\",\n    \"performedBy\": \"postman\"\n}",
+							"options": {
+								"raw": { "language": "json" }
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/transactions/bulk-confirm",
+							"host": ["{{baseUrl}}"],
+							"path": ["transactions", "bulk-confirm"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Invoices",
+			"item": [
+				{
+					"name": "Search Invoices",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/invoices/search?q=&limit=20",
+							"host": ["{{baseUrl}}"],
+							"path": ["invoices", "search"],
+							"query": [
+								{ "key": "q", "value": "", "description": "Customer name" },
+								{ "key": "amount", "value": "", "disabled": true },
+								{ "key": "status", "value": "sent,overdue", "disabled": true },
+								{ "key": "includePaid", "value": "false", "disabled": true },
+								{ "key": "limit", "value": "20" }
+							]
+						}
+					}
+				},
+				{
+					"name": "Get Candidates",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/invoices/candidates?amount=100.00",
+							"host": ["{{baseUrl}}"],
+							"path": ["invoices", "candidates"],
+							"query": [
+								{ "key": "amount", "value": "100.00" },
+								{ "key": "limit", "value": "10", "disabled": true }
+							]
+						}
+					}
+				},
+				{
+					"name": "Get By Number",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/invoices/by-number/:invoiceNumber",
+							"host": ["{{baseUrl}}"],
+							"path": ["invoices", "by-number", ":invoiceNumber"],
+							"variable": [
+								{ "key": "invoiceNumber", "value": "INV-001" }
+							]
+						}
+					}
+				},
+				{
+					"name": "Get By ID",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/invoices/:id",
+							"host": ["{{baseUrl}}"],
+							"path": ["invoices", ":id"],
+							"variable": [
+								{ "key": "id", "value": "UUID-HERE" }
+							]
+						}
+					}
+				}
+			]
+		}
+	],
+	"variable": [
+		{
+			"key": "baseUrl",
+			"value": "http://localhost:8080/api/v1",
+			"type": "string"
+		}
+	]
+}
