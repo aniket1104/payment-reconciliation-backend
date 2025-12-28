@@ -266,15 +266,20 @@ router.get(
  * @access  Public (should be protected in production)
  *
  * Query params:
+ * - page: number (optional, enables offset pagination)
  * - limit: number (default: 50, max: 100)
  * - cursor: string (optional, Base64-encoded cursor from previous response)
  * - status: string (optional filter: auto_matched, needs_review, unmatched, confirmed, external)
  *
- * IMPORTANT: Uses cursor-based pagination for efficiency.
- * NEVER uses OFFSET pagination.
+ * NOTE: Supports both cursor-based (recommended) and offset-based (legacy/UI) pagination.
+ * If 'page' is provided, uses offset pagination. Otherwise uses cursor.
  *
- * Response:
+ * Response (Cursor):
  * - 200 OK: { data: [], nextCursor?: string, hasMore: boolean }
+ *
+ * Response (Offset):
+ * - 200 OK: { transactions: [], pagination: { page, limit, total, totalPages } }
+ *
  * - 400 Bad Request: Invalid cursor
  * - 404 Not Found: Batch not found
  */
@@ -282,7 +287,12 @@ router.get(
   '/:batchId/transactions',
   asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const { batchId } = req.params;
-    const { limit: limitParam, cursor: cursorParam, status } = req.query;
+    const {
+      limit: limitParam,
+      cursor: cursorParam,
+      status,
+      page: pageParam,
+    } = req.query;
 
     // Validate batch exists
     const batchStatus = await getBatchStatus(batchId);
@@ -292,12 +302,6 @@ router.get(
 
     // Parse and validate limit (clamp to max)
     const limit = validateLimit(limitParam as string | undefined);
-
-    // Parse and validate cursor
-    let cursor: { createdAt: string; id: string } | undefined;
-    if (cursorParam && typeof cursorParam === 'string') {
-      cursor = decodeCursor(cursorParam);
-    }
 
     // Validate status if provided
     const validStatuses = [
@@ -312,6 +316,36 @@ router.get(
       throw AppError.badRequest(
         `Invalid status filter. Allowed values: ${validStatuses.join(', ')}`
       );
+    }
+
+    // Check for offset pagination request (page param present)
+    if (pageParam) {
+      const page = parseInt(pageParam as string, 10);
+      if (isNaN(page) || page < 1) {
+        throw AppError.badRequest('Invalid page number');
+      }
+
+      // Use offset-based pagination service
+      // We need to import this function dynamically or add it to imports
+      // For now, assuming it's available in reconciliation.service imports
+      const { getBatchTransactions } = require('../services/reconciliation.service');
+      
+      const result = await getBatchTransactions(batchId, {
+        page,
+        limit,
+        status: status as string | undefined,
+      });
+
+      sendSuccess(res, result, 'Transactions retrieved (offset)');
+      return;
+    }
+
+    // Fallback to Cursor-based pagination
+
+    // Parse and validate cursor
+    let cursor: { createdAt: string; id: string } | undefined;
+    if (cursorParam && typeof cursorParam === 'string') {
+      cursor = decodeCursor(cursorParam);
     }
 
     // Fetch transactions with cursor-based pagination

@@ -1,4 +1,4 @@
-import { PrismaNeon } from '@prisma/adapter-neon';
+// import { PrismaNeon } from '@prisma/adapter-neon';
 import { PrismaClient } from '@prisma/client';
 import { env } from '../config';
 import logger from './logger';
@@ -9,12 +9,9 @@ declare global {
   var prisma: PrismaClient | undefined;
 }
 
-// Create Prisma client with Neon adapter
+// Create Prisma client
 const createPrismaClient = (): PrismaClient => {
-  const adapter = new PrismaNeon({ connectionString: env.DATABASE_URL });
-
   return new PrismaClient({
-    adapter,
     log: env.NODE_ENV === 'development' ? ['query', 'info', 'warn', 'error'] : ['error'],
   });
 };
