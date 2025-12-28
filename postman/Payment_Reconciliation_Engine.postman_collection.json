@@ -1,0 +1,605 @@
+{
+  "info": {
+    "_postman_id": "payment-reconciliation-engine-v1",
+    "name": "Payment Reconciliation Engine",
+    "description": "API collection for the Payment Reconciliation Engine.\n\n## Phases Implemented\n- Phase 1: Data Models & Seeding\n- Phase 2: Pure Matching Engine\n- Phase 3: CSV Upload + Background Worker\n- Phase 4: Redis (Optional Support Layer)\n- Phase 5: Admin Actions + Audit Logging\n- Phase 6: Efficient Pagination + Invoice Search\n\n## Base URL\n`http://localhost:8080/api/v1`\n\n## Authentication\nNo authentication implemented yet (should be added for production).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080/api/v1",
+      "type": "string"
+    },
+    {
+      "key": "batchId",
+      "value": "",
+      "type": "string",
+      "description": "UUID of a reconciliation batch (set after upload)"
+    },
+    {
+      "key": "transactionId",
+      "value": "",
+      "type": "string",
+      "description": "UUID of a bank transaction"
+    },
+    {
+      "key": "invoiceId",
+      "value": "",
+      "type": "string",
+      "description": "UUID of an invoice"
+    },
+    {
+      "key": "cursor",
+      "value": "",
+      "type": "string",
+      "description": "Pagination cursor from previous response"
+    }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "description": "Health check endpoints",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/health",
+              "host": ["{{baseUrl}}"],
+              "path": ["health"]
+            },
+            "description": "Check if the server is running and healthy."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Reconciliation",
+      "description": "CSV upload and batch management endpoints",
+      "item": [
+        {
+          "name": "Upload CSV",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 202) {",
+                  "    var jsonData = pm.response.json();",
+                  "    if (jsonData.data && jsonData.data.batchId) {",
+                  "        pm.collectionVariables.set('batchId', jsonData.data.batchId);",
+                  "        console.log('Batch ID saved:', jsonData.data.batchId);",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": "",
+                  "description": "Select a CSV file with columns: transaction_date, description, amount, reference_number"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/reconciliation/upload",
+              "host": ["{{baseUrl}}"],
+              "path": ["reconciliation", "upload"]
+            },
+            "description": "Upload a bank transactions CSV file for reconciliation.\n\n**CSV Format:**\n```\ntransaction_date,description,amount,reference_number\n2024-01-15,PAYMENT FROM ACME CORP,1500.00,REF001\n```\n\n**Response:** Returns batchId for tracking progress."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Batch Status",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/reconciliation/{{batchId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["reconciliation", "{{batchId}}"]
+            },
+            "description": "Get the current status and progress of a reconciliation batch.\n\n**Response includes:**\n- status (uploading, processing, completed, failed)\n- progress percentage\n- counters (autoMatched, needsReview, unmatched)"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Batch Transactions (Cursor Pagination)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    var jsonData = pm.response.json();",
+                  "    if (jsonData.data && jsonData.data.nextCursor) {",
+                  "        pm.collectionVariables.set('cursor', jsonData.data.nextCursor);",
+                  "        console.log('Next cursor saved:', jsonData.data.nextCursor);",
+                  "    }",
+                  "    if (jsonData.data && jsonData.data.data && jsonData.data.data.length > 0) {",
+                  "        pm.collectionVariables.set('transactionId', jsonData.data.data[0].id);",
+                  "        console.log('First transaction ID saved:', jsonData.data.data[0].id);",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/reconciliation/{{batchId}}/transactions?limit=50",
+              "host": ["{{baseUrl}}"],
+              "path": ["reconciliation", "{{batchId}}", "transactions"],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "50",
+                  "description": "Number of results (default: 50, max: 100)"
+                },
+                {
+                  "key": "cursor",
+                  "value": "{{cursor}}",
+                  "description": "Pagination cursor from previous response",
+                  "disabled": true
+                },
+                {
+                  "key": "status",
+                  "value": "auto_matched",
+                  "description": "Filter by status: auto_matched, needs_review, unmatched, confirmed, external",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Get transactions in a batch using **cursor-based pagination**.\n\n**Important:** Uses cursor-based pagination, NOT offset.\n\n**Query Parameters:**\n- `limit` - Results per page (max: 100)\n- `cursor` - From previous response's `nextCursor`\n- `status` - Filter by transaction status\n\n**Response:**\n```json\n{\n  \"data\": [...],\n  \"nextCursor\": \"base64...\",\n  \"hasMore\": true\n}\n```"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Batch Transactions - Next Page",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/reconciliation/{{batchId}}/transactions?limit=50&cursor={{cursor}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["reconciliation", "{{batchId}}", "transactions"],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "50"
+                },
+                {
+                  "key": "cursor",
+                  "value": "{{cursor}}"
+                }
+              ]
+            },
+            "description": "Get the next page of transactions using the cursor from the previous response."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Batch Transactions - Filter by Status",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/reconciliation/{{batchId}}/transactions?status=needs_review&limit=50",
+              "host": ["{{baseUrl}}"],
+              "path": ["reconciliation", "{{batchId}}", "transactions"],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "needs_review",
+                  "description": "Options: auto_matched, needs_review, unmatched, confirmed, external, pending"
+                },
+                {
+                  "key": "limit",
+                  "value": "50"
+                }
+              ]
+            },
+            "description": "Get transactions filtered by status."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Batch Summary",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/reconciliation/{{batchId}}/summary",
+              "host": ["{{baseUrl}}"],
+              "path": ["reconciliation", "{{batchId}}", "summary"]
+            },
+            "description": "Get summary statistics for a batch including:\n- Match rates (autoMatchRate, needsReviewRate, unmatchedRate)\n- Timing information (startedAt, completedAt, durationMs)"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Transactions (Admin Actions)",
+      "description": "Admin endpoints for managing transaction match decisions.\n\nAll actions are audited in MatchAuditLog.",
+      "item": [
+        {
+          "name": "Get Transaction Details",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    var jsonData = pm.response.json();",
+                  "    if (jsonData.data && jsonData.data.matchedInvoiceId) {",
+                  "        pm.collectionVariables.set('invoiceId', jsonData.data.matchedInvoiceId);",
+                  "        console.log('Invoice ID saved:', jsonData.data.matchedInvoiceId);",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/transactions/{{transactionId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["transactions", "{{transactionId}}"]
+            },
+            "description": "Get full transaction details including:\n- Matched invoice (if any)\n- Audit log history\n- Match details and confidence score"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Transaction Audit History",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/transactions/{{transactionId}}/audit",
+              "host": ["{{baseUrl}}"],
+              "path": ["transactions", "{{transactionId}}", "audit"]
+            },
+            "description": "Get the complete audit trail for a transaction.\n\nShows all match decisions (auto_matched, confirmed, rejected, manual_matched, marked_external)."
+          },
+          "response": []
+        },
+        {
+          "name": "Confirm Match",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"performedBy\": \"admin\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/transactions/{{transactionId}}/confirm",
+              "host": ["{{baseUrl}}"],
+              "path": ["transactions", "{{transactionId}}", "confirm"]
+            },
+            "description": "Confirm a system-suggested match.\n\n**Allowed from statuses:** AUTO_MATCHED, NEEDS_REVIEW\n**Result:** Status → CONFIRMED\n\n**Creates audit log entry.**"
+          },
+          "response": []
+        },
+        {
+          "name": "Reject Match",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"performedBy\": \"admin\",\n    \"reason\": \"Incorrect customer match\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/transactions/{{transactionId}}/reject",
+              "host": ["{{baseUrl}}"],
+              "path": ["transactions", "{{transactionId}}", "reject"]
+            },
+            "description": "Reject a system-suggested match.\n\n**Allowed from statuses:** AUTO_MATCHED, NEEDS_REVIEW\n**Result:** Status → UNMATCHED, clears matched_invoice_id\n\n**Creates audit log entry.**"
+          },
+          "response": []
+        },
+        {
+          "name": "Manual Match",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"invoiceId\": \"{{invoiceId}}\",\n    \"performedBy\": \"admin\",\n    \"reason\": \"Manually identified correct invoice\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/transactions/{{transactionId}}/match",
+              "host": ["{{baseUrl}}"],
+              "path": ["transactions", "{{transactionId}}", "match"]
+            },
+            "description": "Manually match a transaction to a specific invoice.\n\n**Allowed from statuses:** NEEDS_REVIEW, UNMATCHED\n**Result:** Status → CONFIRMED, sets matched_invoice_id\n\n**Creates audit log entry.**"
+          },
+          "response": []
+        },
+        {
+          "name": "Mark as External",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"performedBy\": \"admin\",\n    \"reason\": \"Payment from external system, no invoice exists\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/transactions/{{transactionId}}/external",
+              "host": ["{{baseUrl}}"],
+              "path": ["transactions", "{{transactionId}}", "external"]
+            },
+            "description": "Mark a transaction as external (no invoice exists in the system).\n\n**Allowed from status:** UNMATCHED only\n**Result:** Status → EXTERNAL\n\n**Creates audit log entry.**"
+          },
+          "response": []
+        },
+        {
+          "name": "Bulk Confirm AUTO_MATCHED",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"batchId\": \"{{batchId}}\",\n    \"performedBy\": \"admin\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/transactions/bulk-confirm",
+              "host": ["{{baseUrl}}"],
+              "path": ["transactions", "bulk-confirm"]
+            },
+            "description": "Bulk confirm ALL AUTO_MATCHED transactions in a batch.\n\n**Only affects:** Transactions with status AUTO_MATCHED\n**Result:** All → CONFIRMED\n\n**Creates individual audit log entry for EACH transaction.**"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Invoices (Search)",
+      "description": "Invoice search endpoints for manual matching workflows.\n\nPerformance requirement: <200ms response time.",
+      "item": [
+        {
+          "name": "Search Invoices",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    var jsonData = pm.response.json();",
+                  "    if (jsonData.data && jsonData.data.invoices && jsonData.data.invoices.length > 0) {",
+                  "        pm.collectionVariables.set('invoiceId', jsonData.data.invoices[0].id);",
+                  "        console.log('First invoice ID saved:', jsonData.data.invoices[0].id);",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/invoices/search?limit=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["invoices", "search"],
+              "query": [
+                {
+                  "key": "q",
+                  "value": "Acme",
+                  "description": "Customer name search (case-insensitive partial match)",
+                  "disabled": true
+                },
+                {
+                  "key": "amount",
+                  "value": "1500.00",
+                  "description": "Exact amount match (±$0.01 tolerance)",
+                  "disabled": true
+                },
+                {
+                  "key": "status",
+                  "value": "sent,overdue",
+                  "description": "Comma-separated statuses: draft, sent, overdue (excludes paid by default)",
+                  "disabled": true
+                },
+                {
+                  "key": "includePaid",
+                  "value": "false",
+                  "description": "Include paid invoices (default: false)",
+                  "disabled": true
+                },
+                {
+                  "key": "limit",
+                  "value": "20",
+                  "description": "Max results (default: 20, max: 50)"
+                }
+              ]
+            },
+            "description": "Search invoices for manual matching.\n\n**Query Parameters:**\n- `q` - Customer name (case-insensitive partial match)\n- `amount` - Exact amount (±$0.01 tolerance)\n- `status` - Comma-separated: draft, sent, overdue\n- `includePaid` - Include paid invoices (default: false)\n- `limit` - Max results (default: 20, max: 50)\n\n**Performance:** <200ms response time\n**Ordering:** Due date ASC (closest first)"
+          },
+          "response": []
+        },
+        {
+          "name": "Search by Customer Name",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/invoices/search?q=acme&limit=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["invoices", "search"],
+              "query": [
+                {
+                  "key": "q",
+                  "value": "acme"
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                }
+              ]
+            },
+            "description": "Search invoices by customer name (case-insensitive)."
+          },
+          "response": []
+        },
+        {
+          "name": "Search by Amount",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/invoices/search?amount=1500.00&limit=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["invoices", "search"],
+              "query": [
+                {
+                  "key": "amount",
+                  "value": "1500.00"
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                }
+              ]
+            },
+            "description": "Search invoices by exact amount (±$0.01 tolerance)."
+          },
+          "response": []
+        },
+        {
+          "name": "Search by Name and Amount",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/invoices/search?q=acme&amount=1500.00&limit=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["invoices", "search"],
+              "query": [
+                {
+                  "key": "q",
+                  "value": "acme"
+                },
+                {
+                  "key": "amount",
+                  "value": "1500.00"
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                }
+              ]
+            },
+            "description": "Search invoices by both customer name and amount."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Invoice Candidates for Amount",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/invoices/candidates?amount=1500.00&limit=10",
+              "host": ["{{baseUrl}}"],
+              "path": ["invoices", "candidates"],
+              "query": [
+                {
+                  "key": "amount",
+                  "value": "1500.00",
+                  "description": "Amount to find candidates for (required)"
+                },
+                {
+                  "key": "limit",
+                  "value": "10",
+                  "description": "Max results (default: 10, max: 50)"
+                }
+              ]
+            },
+            "description": "Get invoice candidates for a specific amount.\n\nUseful for suggesting possible matches during manual matching."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Invoice by Number",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/invoices/by-number/INV-001",
+              "host": ["{{baseUrl}}"],
+              "path": ["invoices", "by-number", "INV-001"]
+            },
+            "description": "Look up an invoice by its invoice number."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Invoice by ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/invoices/{{invoiceId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["invoices", "{{invoiceId}}"]
+            },
+            "description": "Get invoice details by UUID."
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}
+

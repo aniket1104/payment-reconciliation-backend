@@ -1,0 +1,155 @@
+// ============================================
+// Payment Reconciliation Engine - Prisma Schema
+// ============================================
+// This schema defines the data model for reconciling
+// bank transactions with invoices.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ============================================
+// ENUMS
+// ============================================
+
+/// Status of an invoice in the system
+enum InvoiceStatus {
+  draft
+  sent
+  paid
+  overdue
+}
+
+/// Status of a bank transaction during reconciliation
+enum BankTransactionStatus {
+  pending       // Newly uploaded, not yet processed
+  auto_matched  // System automatically matched with high confidence
+  needs_review  // Matched but requires manual verification
+  unmatched     // No suitable match found
+  confirmed     // Manually confirmed by user
+  external      // Marked as external/non-invoice transaction
+}
+
+/// Status of a reconciliation batch (CSV upload session)
+enum ReconciliationBatchStatus {
+  uploading   // File is being uploaded
+  processing  // Transactions are being processed
+  completed   // All transactions processed
+  failed      // Processing failed
+}
+
+/// Actions that can be performed on a match
+enum AuditAction {
+  auto_matched     // System automatically matched
+  confirmed        // User confirmed the match
+  rejected         // User rejected the match
+  manual_matched   // User manually selected a different invoice
+  marked_external  // User marked as external transaction
+}
+
+// ============================================
+// MODELS
+// ============================================
+
+/// Invoice model - represents invoices in the system
+/// These are pre-existing records that bank transactions are matched against
+model Invoice {
+  id             String        @id @default(uuid()) @db.Uuid
+  invoiceNumber  String        @unique @map("invoice_number")
+  customerName   String        @map("customer_name")
+  customerEmail  String        @map("customer_email")
+  amount         Decimal       @db.Decimal(10, 2)
+  status         InvoiceStatus @default(draft)
+  dueDate        DateTime      @map("due_date") @db.Date
+  paidAt         DateTime?     @map("paid_at")
+  createdAt      DateTime      @default(now()) @map("created_at")
+
+  // Relations
+  bankTransactions BankTransaction[]
+  // Audit logs where this invoice was the previous match
+  auditLogsPrevious MatchAuditLog[] @relation("PreviousInvoice")
+  // Audit logs where this invoice was the new match
+  auditLogsNew      MatchAuditLog[] @relation("NewInvoice")
+
+  // Indexes for query optimization
+  @@index([amount])
+  @@index([status])
+  @@index([dueDate])
+  @@map("invoices")
+}
+
+/// ReconciliationBatch - represents a single CSV upload session
+/// Groups bank transactions together for processing
+model ReconciliationBatch {
+  id                String                     @id @default(uuid()) @db.Uuid
+  filename          String
+  totalTransactions Int                        @map("total_transactions")
+  processedCount    Int                        @default(0) @map("processed_count")
+  autoMatchedCount  Int                        @default(0) @map("auto_matched_count")
+  needsReviewCount  Int                        @default(0) @map("needs_review_count")
+  unmatchedCount    Int                        @default(0) @map("unmatched_count")
+  status            ReconciliationBatchStatus  @default(uploading)
+  startedAt         DateTime                   @map("started_at")
+  completedAt       DateTime?                  @map("completed_at")
+  createdAt         DateTime                   @default(now()) @map("created_at")
+
+  // Relations
+  bankTransactions BankTransaction[]
+
+  @@map("reconciliation_batches")
+}
+
+/// BankTransaction - represents a single row from bank CSV
+/// Each transaction may be matched to an invoice
+model BankTransaction {
+  id               String                  @id @default(uuid()) @db.Uuid
+  uploadBatchId    String                  @map("upload_batch_id") @db.Uuid
+  transactionDate  DateTime                @map("transaction_date") @db.Date
+  description      String
+  amount           Decimal                 @db.Decimal(10, 2)
+  referenceNumber  String?                 @map("reference_number")
+  status           BankTransactionStatus   @default(pending)
+  matchedInvoiceId String?                 @map("matched_invoice_id") @db.Uuid
+  confidenceScore  Decimal?                @map("confidence_score") @db.Decimal(5, 2)
+  matchDetails     Json?                   @map("match_details")
+  createdAt        DateTime                @default(now()) @map("created_at")
+
+  // Relations
+  uploadBatch    ReconciliationBatch @relation(fields: [uploadBatchId], references: [id], onDelete: Cascade)
+  matchedInvoice Invoice?            @relation(fields: [matchedInvoiceId], references: [id], onDelete: SetNull)
+  auditLogs      MatchAuditLog[]
+
+  // Indexes for query optimization
+  @@index([uploadBatchId])
+  @@index([status])
+  @@index([uploadBatchId, createdAt])
+  @@index([matchedInvoiceId])
+  @@map("bank_transactions")
+}
+
+/// MatchAuditLog - tracks all matching decisions for auditability
+/// Every automated or manual decision is recorded here
+model MatchAuditLog {
+  id                String      @id @default(uuid()) @db.Uuid
+  transactionId     String      @map("transaction_id") @db.Uuid
+  action            AuditAction
+  previousInvoiceId String?     @map("previous_invoice_id") @db.Uuid
+  newInvoiceId      String?     @map("new_invoice_id") @db.Uuid
+  performedBy       String      @map("performed_by") // "system" or admin identifier
+  reason            String?
+  createdAt         DateTime    @default(now()) @map("created_at")
+
+  // Relations
+  transaction     BankTransaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  previousInvoice Invoice?        @relation("PreviousInvoice", fields: [previousInvoiceId], references: [id], onDelete: SetNull)
+  newInvoice      Invoice?        @relation("NewInvoice", fields: [newInvoiceId], references: [id], onDelete: SetNull)
+
+  // Index for querying audit history
+  @@index([transactionId])
+  @@index([createdAt])
+  @@map("match_audit_logs")
+}
