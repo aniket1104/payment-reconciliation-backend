@@ -11,7 +11,7 @@ const envSchema = z.object({
   PORT: z.string().transform(Number).default('8080'),
   HOST: z.string().default('localhost'),
   API_PREFIX: z.string().default('/api/v1'),
-  CORS_ORIGIN: z.string().default('*').transform(s => s.split(',').map(o => o.trim())),
+  CORS_ORIGIN: z.string().default('*').transform(s => s.split(',').map(o => o.trim().replace(/\/$/, ''))),
   RATE_LIMIT_WINDOW_MS: z.string().transform(Number).default('900000'),
   RATE_LIMIT_MAX_REQUESTS: z.string().transform(Number).default('100'),
   LOG_LEVEL: z.string().default('debug'),
