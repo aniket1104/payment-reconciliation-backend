@@ -21,7 +21,9 @@ import {
   getAllBatches,
   getBatchTransactionsCursor,
 } from '../services/reconciliation.service';
-import { startBackgroundProcessing } from '../workers/reconciliationWorker';
+import { isRedisAvailable } from '../redis';
+import { reconciliationQueue } from '../workers/reconciliation.queue';
+import { processReconciliationBatch } from '../workers/reconciliationWorker';
 import { validateLimit, decodeCursor } from '../services/pagination.service';
 
 const router = Router();
@@ -217,9 +219,18 @@ router.post(
 
     Logging.success(`✅ Batch created: ${batch.id}`);
 
-    // Start background processing (non-blocking)
-    startBackgroundProcessing(batch.id, filePath);
-    Logging.info(`🚀 Background processing started for batch: ${batch.id}`);
+    // Start background processing
+    if (isRedisAvailable()) {
+      // Persisted processing via BullMQ
+      await reconciliationQueue.add('reconcile', { batchId: batch.id, filePath });
+      Logging.info(`🚀 Background job queued for batch: ${batch.id}`);
+    } else {
+      // Graceful fallback to main thread processing (non-blocking)
+      Logging.warn(`⚠️ Redis unavailable. Falling back to direct background processing for batch: ${batch.id}`);
+      processReconciliationBatch(batch.id, filePath).catch((err) => {
+        Logging.error(`❌ Direct processing failed for batch ${batch.id}: ${err.message}`);
+      });
+    }
 
     // Return immediately with batch ID
     sendSuccess(

@@ -196,14 +196,14 @@ export async function updateBatchStatus(batchId: string, status: string): Promis
 }
 
 /**
- * Sets total transactions count in cache
+ * Updates batch progress processed count in cache
  */
-export async function setTotalTransactions(batchId: string, total: number): Promise<void> {
+export async function updateBatchProgress(batchId: string, processedCount: number): Promise<void> {
   const cacheKey = getCacheKey(batchId);
 
   await safeRedisWrite(async (client) => {
-    await client.hset(cacheKey, 'totalTransactions', total.toString());
-  }, `Batch total SET (${batchId})`);
+    await client.hset(cacheKey, 'processedCount', processedCount.toString());
+  }, `Batch progress UPDATE (${batchId})`);
 }
 
 /**
@@ -239,7 +239,7 @@ export default {
   initBatchProgress,
   incrementBatchProgress,
   updateBatchStatus,
-  setTotalTransactions,
+  updateBatchProgress,
   markBatchCompletedInCache,
   markBatchFailedInCache,
   clearBatchProgress,

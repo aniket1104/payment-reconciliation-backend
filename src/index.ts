@@ -1,7 +1,9 @@
 import { createApp } from './app';
 import { env } from './config';
 import { logger, Logging, connectDatabase, disconnectDatabase } from './utils';
-import { disconnectRedis } from './redis';
+import { disconnectRedis, getRedisClient } from './redis';
+import { setupReconciliationWorker } from './workers/reconciliation.queue';
+import { processReconciliationJob } from './workers/reconciliationWorker';
 
 /**
  * Start the server
@@ -10,6 +12,13 @@ const startServer = async (): Promise<void> => {
   try {
     // Connect to database
     await connectDatabase();
+
+    // Trigger Redis connection (for early logging and availability check)
+    getRedisClient();
+
+    // Setup background workers
+    const worker = setupReconciliationWorker(processReconciliationJob);
+    logger.info('👷 Reconciliation worker initialized');
 
     const app = createApp();
 
@@ -32,6 +41,9 @@ const startServer = async (): Promise<void> => {
 
         // Disconnect from Redis (optional - gracefully handle if unavailable)
         await disconnectRedis();
+
+        // Close BullMQ worker
+        await worker.close();
 
         // Disconnect from database
         await disconnectDatabase();

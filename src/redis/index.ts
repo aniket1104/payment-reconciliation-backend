@@ -33,7 +33,7 @@ export {
   initBatchProgress,
   incrementBatchProgress,
   updateBatchStatus,
-  setTotalTransactions,
+  updateBatchProgress,
   markBatchCompletedInCache,
   markBatchFailedInCache,
   clearBatchProgress,

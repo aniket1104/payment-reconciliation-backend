@@ -79,6 +79,7 @@ function createRedisClient(): Redis | null {
     client.on('connect', () => {
       isConnected = true;
       logger.info('📦 Redis connected successfully');
+      console.log('📦 Redis connected successfully');
     });
 
     client.on('ready', () => {

@@ -6,6 +6,6 @@
 
 export {
   processReconciliationBatch,
-  startBackgroundProcessing,
+  processReconciliationJob,
 } from './reconciliationWorker';
 
