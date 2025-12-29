@@ -400,9 +400,17 @@ npm run start
 ```
 
 ## 📸 Test Results
-> [!NOTE]
-> Placeholder for test result screenshots (Postman executions, Prisma Studio, or Console outputs).
-> ![Backend Tests Placeholder](https://via.placeholder.com/800x400?text=Insert+Backend+Test+Results+Here)
+
+#### Test Result for 1000 rows
+<img width="592" height="661" alt="Screenshot 2025-12-29 at 10 03 27 AM" src="https://github.com/user-attachments/assets/cf3ad247-a266-47e7-b7f7-35814979fed8" />
+
+#### Test Result for 10000 rows
+<img width="572" height="570" alt="Screenshot 2025-12-29 at 10 02 00 AM" src="https://github.com/user-attachments/assets/b5ff4f42-f71c-4849-bced-f571df0dced4" />
+
+#### Backend Unit Testing using Jest
+<img width="288" height="73" alt="Screenshot 2025-12-29 at 10 19 46 AM" src="https://github.com/user-attachments/assets/1fd1943a-4521-4d0a-ad34-946e1396b9e9" />
+
+
 
 ---
 
