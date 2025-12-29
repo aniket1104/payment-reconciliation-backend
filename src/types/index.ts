@@ -6,7 +6,7 @@ export interface EnvConfig {
   PORT: number;
   HOST: string;
   API_PREFIX: string;
-  CORS_ORIGIN: string;
+  CORS_ORIGIN: string[];
   RATE_LIMIT_WINDOW_MS: number;
   RATE_LIMIT_MAX_REQUESTS: number;
   LOG_LEVEL: string;

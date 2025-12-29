@@ -30,7 +30,7 @@ export const createApp = (): Application => {
         if (allowedOrigins.includes('*') || allowedOrigins.includes(origin)) {
           callback(null, true);
         } else {
-          callback(new Error('Not allowed by CORS'));
+          callback(null, false);
         }
       },
       credentials: true,
