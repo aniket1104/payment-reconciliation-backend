@@ -17,6 +17,43 @@ The implementation strictly follows the requirements described in the **Round 2 
 
 ## High-Level Architecture
 
+The system follows a **decoupled, event-driven architecture** optimized for high-throughput reconciliation.
+
+```mermaid
+graph TD
+    Client[Frontend / CLI] -->|POST /upload| API[Express API]
+    API -->|1. Create Batch| DB[(PostgreSQL)]
+    API -->|2. Queue Job| RedisQueue{{"BullMQ (Redis)"}}
+    
+    subgraph "Worker Thread Layer"
+        RedisQueue -->|3. Pull Job| Worker[Reconciliation Worker]
+        Worker -->|4. Stream CSV| FS[File System]
+        Worker -->|5. Match & Chunk| Engine[Matching Engine]
+        Worker -->|6. Bulk Save| DB
+        Worker -->|7. Update Progress| RedisMirror["Redis (Progress Mirror)"]
+    end
+    
+    API -->|GET /status| RedisMirror
+```
+
+### System Components
+
+#### 1. API Layer (Express)
+Handles file uploads, batch creation, and provides real-time status updates. It acts as an orchestrator, delegating heavy work to the background layer.
+
+#### 2. Background Processing (BullMQ + Redis)
+The "Golden Standard" for reliability. BullMQ provides:
+- **Persistence**: Jobs are saved to Redis, surviving server restarts.
+- **Concurrency**: Offloads CPU-intensive matching to separate processes.
+- **Retries**: Automatically handles transient failures (e.g., database lock contention).
+
+#### 3. Scaling Strategy: Streaming & Chunking
+To handle millions of rows:
+- **Streaming Parser**: Files are read line-by-line using `fs.createReadStream`, maintaining $O(1)$ memory usage regardless of file size.
+- **Chunked IO**: Transactions are processed and saved in batches of 1,000 using Prisma `createMany` for optimal database performance.
+
+#### 4. Graceful Fallback
+If Redis is unavailable, the system automatically detects this and falls back to **direct background processing** on the main thread. This ensures the service remains functional even during a Redis outage.
 
 ---
 
@@ -91,19 +128,13 @@ Business logic remains in services, not inside ORM abstractions.
 
 ---
 
-### Redis (Optional Support Layer)
+### Redis (Infrastructure Support Layer)
 
-Redis is used **only as a performance optimization**, never as a source of truth.
+Redis serves a dual purpose in this system:
+1. **Persistent Job Queue (BullMQ)**: Ensures background reconciliation jobs are queued reliably and can survive server restarts.
+2. **Performance Optimization**: Caches recently accessed invoices and mirrors batch progress for near-instant UI updates.
 
-Used for:
-1. Invoice lookup caching (read-heavy data)
-2. Reconciliation progress tracking
-
-> The system functions correctly even if Redis is unavailable.
-
-This ensures:
-- No correctness dependency on Redis
-- Safe degradation during failures
+> **Resilience First**: While BullMQ is the preferred "Golden Standard", the system is designed with **graceful degradation**. If Redis is unavailable, the engine automatically falls back to in-process background processing, ensuring zero downtime.
 
 ---
 
@@ -248,14 +279,13 @@ Processing them synchronously would:
 
 ---
 
-### In-Process Worker
+### Persistent Job Queue (BullMQ)
 
-An in-process worker is used because:
-- Batch size is finite
-- Single-node deployment is sufficient
-- Easier to debug and reason about
-
-The design allows easy migration to **BullMQ** if scaling is required.
+The system uses **BullMQ** for background job management because:
+- **Scalability**: Can handle massive CSV files (up to millions of rows).
+- **Isolation**: Processing runs in separate worker threads, keeping the API responsive.
+- **Resilience**: Redis persistence ensures jobs are not lost if the process crashes.
+- **Graceful Fallback**: If Redis is missing, the system falls back to a non-persistent in-process mode automatically.
 
 ---
 
@@ -343,11 +373,11 @@ This backend:
 
 ## Future Improvements (Out of Scope)
 
-- Move worker to BullMQ for horizontal scaling
 - Add authentication and RBAC
 - Support partial payments
 - Add batch reprocessing
 - Add reconciliation analytics
+- Integration with external bank APIs (Plaid, etc.)
 
 ---
 
@@ -367,13 +397,15 @@ Every design choice favors:
 ### 1. Prerequisites
 - **Node.js**: v20 or higher
 - **PostgreSQL**: Local instance or cloud-hosted
-- **Redis (Optional)**: For performance optimization
+- **Redis**: Required for the persistent queue (BullMQ). The system gracefully falls back to direct processing if Redis is unavailable.
 
 ### 2. Environment Setup
 Create a `.env` file in the `backend` directory:
 ```env
 PORT=8080
 DATABASE_URL="your_postgresql_connection_string"
+REDIS_HOST=localhost
+REDIS_PORT=6379
 CORS_ORIGIN="http://localhost:3000"
 NODE_ENV=development
 API_PREFIX=/api/v1
